@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 )
 
-func listenClients(msgs *[]string, clients *[]net.Conn, c net.Conn, channel chan string) {
+func listenClients(msgs *[]string, clients *[]net.Conn, c net.Conn, channel chan string, chanInfo chan string) {
 	var msg string
 	for {
 		// recibimos los mensajes del cliente
@@ -22,6 +23,8 @@ func listenClients(msgs *[]string, clients *[]net.Conn, c net.Conn, channel chan
 			for i, v := range *clients {
 				if v == c {
 					*clients = append((*clients)[:i], (*clients)[i+1:]...)
+					connected := strconv.Itoa(len(*clients))
+					chanInfo <- connected
 					break
 				}
 			}
@@ -45,7 +48,7 @@ func listenClients(msgs *[]string, clients *[]net.Conn, c net.Conn, channel chan
 	}
 }
 
-func checkConnection(s net.Listener, clients *[]net.Conn, msgs *[]string, channel chan string) {
+func checkConnection(s net.Listener, clients *[]net.Conn, msgs *[]string, channel chan string, chanInfo chan string) {
 	var exists bool
 	for {
 		// peticiones del cliente
@@ -65,7 +68,9 @@ func checkConnection(s net.Listener, clients *[]net.Conn, msgs *[]string, channe
 		// si el cliente no existe, entonces lo añadimos
 		if !exists {
 			*clients = append(*clients, c)
-			go listenClients(msgs, clients, c, channel)
+			connected := strconv.Itoa(len(*clients))
+			chanInfo <- connected
+			go listenClients(msgs, clients, c, channel, chanInfo)
 		}
 	}
 }
@@ -95,31 +100,46 @@ func saveMsgs(msgs []string) {
 	}
 }
 
-// func sendInfoMidware(port, chat string, clients *[]net.Conn) {
-// 	c, err := net.Dial("tcp", ":9999")
-// 	if err != nil {
-// 		fmt.Println(err)
-// 	}
-// }
+func sendInfoMidware(address, topic string, chanInfo chan string) {
+	c, err := net.Dial("tcp", ":9998")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer c.Close()
+	for {
+		info := <-chanInfo
+		err = gob.NewEncoder(c).Encode(topic+" -> "+address+" ("+info+")")
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+func getPort() (string, string) {
+	input := bufio.NewScanner(os.Stdin)
+	topics := []string{"Politica", "Deportes", "Economia"}
+	menu := "1) Politica\n" + 
+			"2) Deportes\n" + 
+			"3) Economia\n"
+	fmt.Print(menu)
+	fmt.Println("Ingrese la tematica del chat: ")
+	input.Scan()
+	index,_ := strconv.Atoi(input.Text())
+	return topics[index-1], ":900"+input.Text()
+}
 
 func main() {
 	var clients []net.Conn
 	var msgs []string
 	channel := make(chan string)
+	chanInfo := make(chan string)
+
+	topic, port := getPort()
+
 	menu := "1) Mostrar mensajes/archivos\n" + 
 			"2) Respaldar mensajes\n" + 
 			"3) Salir\n"
-	input := bufio.NewScanner(os.Stdin)
-
-	fmt.Println("Ingrese el puerto del servidor: ")
-	input.Scan()
-
-	port := ":" + input.Text()
-
-	fmt.Println("Ingrese la tematica del chat: ")
-	input.Scan()
-
-	// go sendInfoMidware(port, input.Text(), &clients)
+	input := bufio.NewScanner(os.Stdin)	
 
 	// se crea el servidor
 	s, err := net.Listen("tcp", port)
@@ -128,10 +148,14 @@ func main() {
 		return
 	}
 	defer s.Close()
-	go checkConnection(s, &clients, &msgs, channel)
+	go checkConnection(s, &clients, &msgs, channel, chanInfo)
 	go clientsMsgsHandler(&clients, channel)
 
+	go sendInfoMidware(s.Addr().String(), topic, chanInfo)
+	chanInfo <- strconv.Itoa(len(clients))
+
 	for {
+		fmt.Println(topic + "("+strconv.Itoa(len(clients))+" conectados)")
 		fmt.Print(menu)
 		input.Scan()
 		switch input.Text() {

@@ -44,7 +44,7 @@ func listenServer(msgs *[]string, c net.Conn, name string) {
 				*msgs = append(*msgs, "Enviaste: " + fileName)
 			}
 
-		} else if strings.Contains(msg, name) {
+		} else if strings.Contains(msg, name+": ") {
 			// si el mensaje recibido lleva el nombre del cliente
 			// entonces se reemplaza por la palabra "Tú"
 			*msgs = append(*msgs, "Tú:" + msg[len(name)+1:])
@@ -203,16 +203,16 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	options := getOptions()
 
-	// enlistamos las salas de chat
+	// enlistamos las salas de chat por RPC
 	for i, v := range(options) {
-		fmt.Printf("%d) %s\n", i, v)
+		fmt.Printf("%d) %s\n", i+1, v)
 	}
 	fmt.Println("Elige una sala de chat: ")
 	scanner.Scan()
 	opc,_ := strconv.Atoi(scanner.Text())
 
-	// obtenemos el puerto de la sala de chat
-	port := getPort(options[opc])
+	// obtenemos el puerto de la sala de chat por RPC
+	port := getPort(options[opc-1])
 
-	client(port, options[opc])
+	client(port, options[opc-1])
 }
