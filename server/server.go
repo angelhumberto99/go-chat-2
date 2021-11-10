@@ -89,8 +89,8 @@ func clientsMsgsHandler(clients *[]net.Conn, channel chan string) {
 	}
 }
 
-func saveMsgs(msgs []string) {
-	file, err := os.Create("dataBase.txt")
+func saveMsgs(msgs []string, topic string) {
+	file, err := os.Create(topic+".txt")
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -108,7 +108,12 @@ func sendInfoMidware(address, topic string, chanInfo chan string) {
 	defer c.Close()
 	for {
 		info := <-chanInfo
-		err = gob.NewEncoder(c).Encode(topic+" -> "+address+" ("+info+")")
+		if info == "/quit" {
+			err = gob.NewEncoder(c).Encode(info+topic+" -> "+address)
+		} else {
+			err = gob.NewEncoder(c).Encode(topic+" -> "+address+" ("+info+" clientes)")
+		}
+
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -165,8 +170,9 @@ func main() {
 					fmt.Println(v)
 				}
 			case "2": // respaldar mensajes
-				saveMsgs(msgs)
+				saveMsgs(msgs, topic)
 			case "3": // terminar cliente
+				chanInfo <- "/quit"
 				fmt.Println("Terminando Servidor")
 			default:
 				fmt.Println("Opción incorrecta")

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+	"strings"
 )
 
 type Server struct {}
@@ -25,16 +26,27 @@ func (s *Server) GetPort(chat string, reply *string) error {
 	return nil
 }
 
-func listenServer(c net.Conn) {
+func listenServer(c net.Conn, servers *[]net.Conn) {
 	var msg string
 	for {
 		err := gob.NewDecoder(c).Decode(&msg)
+		if strings.Contains(msg, "/quit") {
+			for i, v := range *servers {
+				if v == c {
+					*servers = append((*servers)[:i], (*servers)[i+1:]...)
+					break
+				}
+			}
+			c.Close()
+			fmt.Println("Offline:", msg[len("/quit"):])
+			return
+		}
 		if err != nil {
 			fmt.Println(err)
 			// terminamos el programa
 			os.Exit(1)
 		}
-		fmt.Println("server info: ", msg)
+		fmt.Println("Online:", msg)
 	}
 }
 
@@ -63,15 +75,12 @@ func checkServers(servers *[]net.Conn) {
 		// si el cliente no existe, entonces lo añadimos
 		if !exists {
 			*servers = append(*servers, c)
-			go listenServer(c)
+			go listenServer(c, servers)
 		}
 	}
 }
 
 func rpcServer() {
-	// nombre del chat: usuarios conectados
-	// chats := make(map[string]int)
-
 	rpc.Register(new(Server))
 	ln, err := net.Listen("tcp", ":9999")
 	if err != nil {
