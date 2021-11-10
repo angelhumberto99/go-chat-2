@@ -6,10 +6,14 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type Server struct {}
+
+// tematica: cantidad de clientes conectados
+var clients map[string]int
 
 func (s *Server) GetChats(args string, reply *[]string) error {
 	args = ""
@@ -26,7 +30,12 @@ func (s *Server) GetPort(chat string, reply *string) error {
 	return nil
 }
 
-func listenServer(c net.Conn, servers *[]net.Conn) {
+func (s *Server) GetClients(chat string, reply *int) error {
+	*reply = clients[chat]
+	return nil
+}
+
+func listenServer(c net.Conn, servers *[]net.Conn, infoChan chan string) {
 	var msg string
 	for {
 		err := gob.NewDecoder(c).Decode(&msg)
@@ -38,7 +47,7 @@ func listenServer(c net.Conn, servers *[]net.Conn) {
 				}
 			}
 			c.Close()
-			fmt.Println("Offline:", msg[len("/quit"):])
+			infoChan <- "Offline: "+ msg[len("/quit"):]
 			return
 		}
 		if err != nil {
@@ -46,12 +55,30 @@ func listenServer(c net.Conn, servers *[]net.Conn) {
 			// terminamos el programa
 			os.Exit(1)
 		}
-		fmt.Println("Online:", msg)
+		
+		topic := strings.Split(msg, " ->")[0]
+		online := strings.Split(msg, "(")[1]
+		online = strings.Split(online, " clientes)")[0]
+
+		val,_ := strconv.Atoi(online)
+		clients[topic] = val
+		infoChan <- "Online: "+ msg
+	}
+}
+
+func listenAdmin(c net.Conn, infoChan chan string) {
+	for {
+		val := <-infoChan
+		err := gob.NewEncoder(c).Encode(val)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }
 
 func checkServers(servers *[]net.Conn) {
 	var exists bool
+	infoChan := make(chan string)
 	s, err := net.Listen("tcp", ":9998")
 	if err != nil {
 		fmt.Println(err)
@@ -74,8 +101,17 @@ func checkServers(servers *[]net.Conn) {
 		
 		// si el cliente no existe, entonces lo añadimos
 		if !exists {
-			*servers = append(*servers, c)
-			go listenServer(c, servers)
+			var msg string
+			_ = gob.NewDecoder(c).Decode(&msg)
+			if msg == "/admin" {
+				fmt.Println("admin")
+				go listenAdmin(c, infoChan)
+			} else {
+				*servers = append(*servers, c)
+				fmt.Println("servidor")
+				go listenServer(c, servers, infoChan)
+				infoChan <- "Online: "+ msg
+			}
 		}
 	}
 }
@@ -100,6 +136,7 @@ func rpcServer() {
 
 func main() {
 	var servers []net.Conn
+	clients = make(map[string]int)
 	go rpcServer()
 	go checkServers(&servers)
 	var input string

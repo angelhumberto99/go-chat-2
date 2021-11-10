@@ -160,7 +160,7 @@ func main() {
 	chanInfo <- strconv.Itoa(len(clients))
 
 	for {
-		fmt.Println(topic + "("+strconv.Itoa(len(clients))+" conectados)")
+		fmt.Println(topic + " ("+strconv.Itoa(len(clients))+" conectados)")
 		fmt.Print(menu)
 		input.Scan()
 		switch input.Text() {

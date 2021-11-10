@@ -97,11 +97,24 @@ func sendFile(fileName, userName string, c net.Conn) {
 	}
 }
 
+func getClients(chat string) string {
+	c, err := rpc.Dial("tcp", ":9999")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	var res int
+	err = c.Call("Server.GetClients", chat, &res)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return strconv.Itoa(res)
+}
+
 func client(port string, chat string) {
 	var msgs []string
 	var name string
-	menu := chat + "\n" +
-			"1) Mostrar mensajes/archivos\n" + 
+	menu := "1) Mostrar mensajes/archivos\n" + 
 			"2) Enviar mensaje\n" +
 			"3) Enviar archivo\n" + 
 			"4) Salir\n"
@@ -126,6 +139,7 @@ func client(port string, chat string) {
 	go listenServer(&msgs, c, name)
 
 	for {
+		fmt.Print(chat + " (" + getClients(chat) + " conectados)\n")
 		fmt.Print(menu)
 		input.Scan()
 
